@@ -28,7 +28,7 @@ Flags:
       --destination-big              Destination GitLab is a big instance
   -f, --destination-force-freemium   Force the destination GitLab to be treated as a non premium instance
   -p, --destination-force-premium    Force the destination GitLab to be treated as a premium instance
-      --destination-token string     Destination GitLab Token
+      --destination-token string     Destination GitLab Token (env DESTINATION_GITLAB_TOKEN)
       --destination-url string       Destination GitLab URL
       --dry-run                      Perform a dry run without making any changes
   -h, --help                         help for gitlab-sync
@@ -37,7 +37,7 @@ Flags:
   -n, --no-prompt                    Disable prompting for missing values
   -r, --retry int                    Number of retries for failed requests (default 3)
       --source-big                   Source GitLab is a big instance
-      --source-token string          Source GitLab Token
+      --source-token string          Source GitLab Token (env SOURCE_GITLAB_TOKEN)
       --source-url string            Source GitLab URL
       --user-agent string            User-Agent sent with every GitLab API request (default "gitlab-sync/<version>")
   -v, --verbose                      Enable verbose output

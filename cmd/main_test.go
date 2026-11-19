@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/boxboxjason/gitlab-sync/internal/utils"
 
+	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
 
@@ -326,6 +328,98 @@ func TestUserAgentFlag(t *testing.T) {
 
 		if args.UserAgent != "nightly/2.0" {
 			t.Errorf("expected %q, got %q", "nightly/2.0", args.UserAgent)
+		}
+	})
+}
+
+const (
+	sentinelSourceToken      = "glpat-SENTINEL-SOURCE-0123"
+	sentinelDestinationToken = "glpat-SENTINEL-DEST-4567"
+)
+
+// newTestRootCmd builds the root command with a no-op Run, capturing its output.
+func newTestRootCmd(args *utils.ParserArgs) (*cobra.Command, *bytes.Buffer) {
+	var (
+		mirrorMappingPath string
+		logFile           string
+	)
+
+	rootCmd := buildRootCmd(args, &mirrorMappingPath, &logFile)
+	rootCmd.Run = func(*cobra.Command, []string) {}
+
+	var output bytes.Buffer
+
+	rootCmd.SetOut(&output)
+	rootCmd.SetErr(&output)
+
+	return rootCmd, &output
+}
+
+func TestTokensNeverPrintedInHelp(t *testing.T) {
+	t.Setenv("SOURCE_GITLAB_TOKEN", sentinelSourceToken)
+	t.Setenv("DESTINATION_GITLAB_TOKEN", sentinelDestinationToken)
+
+	tests := []struct {
+		name    string
+		cmdArgs []string
+	}{
+		{name: "help flag", cmdArgs: []string{"--help"}},
+		{name: "usage after a flag error", cmdArgs: []string{"--not-a-flag"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var args utils.ParserArgs
+
+			rootCmd, output := newTestRootCmd(&args)
+			rootCmd.SetArgs(tt.cmdArgs)
+
+			_ = rootCmd.Execute()
+
+			if !strings.Contains(output.String(), "--source-token") {
+				t.Fatalf("expected usage in output, got:\n%s", output.String())
+			}
+
+			for _, secret := range []string{sentinelSourceToken, sentinelDestinationToken} {
+				if strings.Contains(output.String(), secret) {
+					t.Errorf("output leaks a token:\n%s", output.String())
+				}
+			}
+		})
+	}
+}
+
+func TestTokensEnvFallbackAndFlagPrecedence(t *testing.T) {
+	t.Setenv("SOURCE_GITLAB_TOKEN", sentinelSourceToken)
+	t.Setenv("DESTINATION_GITLAB_TOKEN", sentinelDestinationToken)
+
+	t.Run("env var is the fallback", func(t *testing.T) {
+		var args utils.ParserArgs
+
+		rootCmd, _ := newTestRootCmd(&args)
+		rootCmd.SetArgs([]string{})
+
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		if args.SourceGitlabToken != sentinelSourceToken || args.DestinationGitlabToken != sentinelDestinationToken {
+			t.Errorf("env fallback not applied: got %q / %q", args.SourceGitlabToken, args.DestinationGitlabToken)
+		}
+	})
+
+	t.Run("flag overrides env var", func(t *testing.T) {
+		var args utils.ParserArgs
+
+		rootCmd, _ := newTestRootCmd(&args)
+		rootCmd.SetArgs([]string{"--source-token", "from-flag-src", "--destination-token", "from-flag-dst"})
+
+		if err := rootCmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+
+		if args.SourceGitlabToken != "from-flag-src" || args.DestinationGitlabToken != "from-flag-dst" {
+			t.Errorf("flag did not win: got %q / %q", args.SourceGitlabToken, args.DestinationGitlabToken)
 		}
 	})
 }

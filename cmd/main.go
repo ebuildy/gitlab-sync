@@ -62,16 +62,19 @@ func buildRootCmd(args *utils.ParserArgs, mirrorMappingPath, logFile *string) *c
 		Version: versionInfo(),
 		Short:   "Copy and enable mirroring of gitlab projects and groups",
 		Long:    "Fully customizable gitlab repositories and groups mirroring between two (or one) gitlab instances.",
+		PreRun: func(cmd *cobra.Command, _ []string) {
+			applyTokenEnv(cmd, args)
+		},
 		Run: func(cmd *cobra.Command, cmdArgs []string) {
 			executeMirroringCommand(args, mirrorMappingPath, logFile)
 		},
 	}
 
 	rootCmd.Flags().StringVar(&args.SourceGitlabURL, "source-url", os.Getenv("SOURCE_GITLAB_URL"), "Source GitLab URL")
-	rootCmd.Flags().StringVar(&args.SourceGitlabToken, "source-token", os.Getenv("SOURCE_GITLAB_TOKEN"), "Source GitLab Token")
+	rootCmd.Flags().StringVar(&args.SourceGitlabToken, "source-token", "", "Source GitLab Token (env SOURCE_GITLAB_TOKEN)")
 	rootCmd.Flags().BoolVar(&args.SourceGitlabIsBig, "source-big", strings.TrimSpace(os.Getenv("SOURCE_GITLAB_BIG")) != "", "Source GitLab is a big instance")
 	rootCmd.Flags().StringVar(&args.DestinationGitlabURL, "destination-url", os.Getenv("DESTINATION_GITLAB_URL"), "Destination GitLab URL")
-	rootCmd.Flags().StringVar(&args.DestinationGitlabToken, "destination-token", os.Getenv("DESTINATION_GITLAB_TOKEN"), "Destination GitLab Token")
+	rootCmd.Flags().StringVar(&args.DestinationGitlabToken, "destination-token", "", "Destination GitLab Token (env DESTINATION_GITLAB_TOKEN)")
 	rootCmd.Flags().BoolVar(&args.DestinationGitlabIsBig, "destination-big", strings.TrimSpace(os.Getenv("DESTINATION_GITLAB_BIG")) != "", "Destination GitLab is a big instance")
 	rootCmd.Flags().BoolVarP(&args.ForcePremium, "destination-force-premium", "p", false, "Force the destination GitLab to be treated as a premium instance")
 	rootCmd.Flags().BoolVarP(&args.ForceNonPremium, "destination-force-freemium", "f", false, "Force the destination GitLab to be treated as a non premium instance")
@@ -91,6 +94,19 @@ func buildRootCmd(args *utils.ParserArgs, mirrorMappingPath, logFile *string) *c
 	addCompletionCommand(rootCmd)
 
 	return rootCmd
+}
+
+// applyTokenEnv falls back to the token environment variables when the token
+// flags were not set. Tokens are deliberately not flag defaults: pflag prints
+// defaults in --help and usage output, which would leak them into CI logs.
+func applyTokenEnv(cmd *cobra.Command, args *utils.ParserArgs) {
+	if !cmd.Flags().Changed("source-token") {
+		args.SourceGitlabToken = os.Getenv("SOURCE_GITLAB_TOKEN")
+	}
+
+	if !cmd.Flags().Changed("destination-token") {
+		args.DestinationGitlabToken = os.Getenv("DESTINATION_GITLAB_TOKEN")
+	}
 }
 
 // envString reads a trimmed string from the environment, falling back to
